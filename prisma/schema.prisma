@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  username     String?     @unique
+  displayName  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  sessions     Session[]
+  tags         Tag[]
+  tasks        Task[]
+  preferences  UserPreferences?
+}
+
+model Session {
+  id                String    @id @default(cuid())
+  userId            String
+  type              String    // work, short_break, long_break
+  durationMinutes   Int
+  startedAt         DateTime
+  completedAt       DateTime?
+  pausedDurationSec Int       @default(0)
+  tagId             String?
+  taskId            String?
+  notes             String?
+  isCompleted       Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag               Tag?      @relation(fields: [tagId], references: [id])
+  task              Task?     @relation(fields: [taskId], references: [id])
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  color     String
+  icon      String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions  Session[]
+
+  @@unique([userId, name])
+}
+
+model Task {
+  id                  String    @id @default(cuid())
+  userId              String
+  title               String
+  description         String?
+  estimatedPomodoros  Int       @default(1)
+  completedPomodoros  Int       @default(0)
+  externalLink        String?
+  status              String    @default("pending") // pending, in_progress, completed
+  dueDate             DateTime?
+  createdAt           DateTime  @default(now())
+  completedAt         DateTime?
+
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions            Session[]
+}
+
+model UserPreferences {
+  userId                  String  @id
+  workDuration            Int     @default(25)
+  shortBreakDuration      Int     @default(5)
+  longBreakDuration       Int     @default(15)
+  sessionsUntilLongBreak  Int     @default(4)
+  autoStartBreaks         Boolean @default(false)
+  autoStartPomodoros      Boolean @default(false)
+  notificationSound       String  @default("default")
+  notificationVolume      Int     @default(70)
+  theme                   String  @default("auto") // light, dark, auto
+  strictMode              Boolean @default(false)
+  dailyGoalPomodoros      Int     @default(8)
+  updatedAt               DateTime @updatedAt @default(now())
+
+  user                    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,255 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { Play, Pause, RotateCcw, Coffee, Brain, TreePine } from 'lucide-react'
+import { toast } from 'sonner'
+
+type SessionType = 'work' | 'shortBreak' | 'longBreak'
+
+interface Session {
+  type: SessionType
+  duration: number
+  name: string
+  icon: React.ReactNode
+  color: string
+}
+
+const sessions: Record<SessionType, Session> = {
+  work: {
+    type: 'work',
+    duration: 25 * 60,
+    name: '作業',
+    icon: <Brain className="w-8 h-8" />,
+    color: 'from-red-500 to-rose-500',
+  },
+  shortBreak: {
+    type: 'shortBreak',
+    duration: 5 * 60,
+    name: '短い休憩',
+    icon: <Coffee className="w-8 h-8" />,
+    color: 'from-green-500 to-emerald-500',
+  },
+  longBreak: {
+    type: 'longBreak',
+    duration: 15 * 60,
+    name: '長い休憩',
+    icon: <TreePine className="w-8 h-8" />,
+    color: 'from-blue-500 to-cyan-500',
+  },
+}
+
+export default function Timer() {
+  const [currentSession, setCurrentSession] = useState<SessionType>('work')
+  const [timeLeft, setTimeLeft] = useState(sessions.work.duration)
+  const [isRunning, setIsRunning] = useState(false)
+  const [sessionCount, setSessionCount] = useState(0)
+  const [totalSessions, setTotalSessions] = useState(0)
+
+  // 通知権限をリクエスト
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
+
+  const session = sessions[currentSession]
+  const progress = ((session.duration - timeLeft) / session.duration) * 100
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs
+      .toString()
+      .padStart(2, '0')}`
+  }
+
+  const handleComplete = useCallback(() => {
+    // 通知音を再生（実際の音声ファイルがある場合は以下のコメントを解除）
+    // const audio = new Audio('/notification.mp3')
+    // audio.play().catch(() => {})
+
+    // ブラウザ通知を表示
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('ポモドーロタイマー', {
+        body: currentSession === 'work' ? '作業完了！休憩しましょう' : '休憩終了！作業を始めましょう',
+        icon: '/favicon.ico',
+      })
+    }
+
+    if (currentSession === 'work') {
+      const newSessionCount = sessionCount + 1
+      setSessionCount(newSessionCount)
+      setTotalSessions(totalSessions + 1)
+
+      if (newSessionCount >= 4) {
+        toast.success('お疲れ様でした！長い休憩を取りましょう')
+        setCurrentSession('longBreak')
+        setTimeLeft(sessions.longBreak.duration)
+        setSessionCount(0)
+      } else {
+        toast.success('作業お疲れ様！短い休憩を取りましょう')
+        setCurrentSession('shortBreak')
+        setTimeLeft(sessions.shortBreak.duration)
+      }
+    } else {
+      toast.info('休憩終了！次の作業を始めましょう')
+      setCurrentSession('work')
+      setTimeLeft(sessions.work.duration)
+    }
+    setIsRunning(false)
+  }, [currentSession, sessionCount, totalSessions])
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | undefined
+
+    if (isRunning && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft((prevTime) => {
+          if (prevTime <= 1) {
+            handleComplete()
+            return 0
+          }
+          return prevTime - 1
+        })
+      }, 1000)
+    } else if (timeLeft === 0) {
+      handleComplete()
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [isRunning, timeLeft, handleComplete])
+
+  const toggleTimer = () => {
+    setIsRunning(!isRunning)
+  }
+
+  const resetTimer = () => {
+    setIsRunning(false)
+    setTimeLeft(session.duration)
+  }
+
+  const switchSession = (type: SessionType) => {
+    setIsRunning(false)
+    setCurrentSession(type)
+    setTimeLeft(sessions[type].duration)
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
+      <div className="text-center mb-8">
+        <div
+          className={`inline-flex items-center justify-center p-4 rounded-full bg-gradient-to-br ${session.color} text-white mb-4`}
+        >
+          {session.icon}
+        </div>
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+          {session.name}
+        </h2>
+        <div className="flex justify-center gap-2 mt-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-2 h-2 rounded-full ${
+                i < sessionCount
+                  ? 'bg-indigo-500'
+                  : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="relative w-64 h-64 mx-auto mb-8">
+        <svg className="absolute inset-0 -rotate-90 w-64 h-64">
+          <circle
+            cx="128"
+            cy="128"
+            r="120"
+            stroke="currentColor"
+            strokeWidth="8"
+            fill="none"
+            className="text-gray-200 dark:text-gray-700"
+          />
+          <circle
+            cx="128"
+            cy="128"
+            r="120"
+            stroke="url(#gradient)"
+            strokeWidth="8"
+            fill="none"
+            strokeDasharray={`${2 * Math.PI * 120}`}
+            strokeDashoffset={`${
+              2 * Math.PI * 120 * (1 - progress / 100)
+            }`}
+            className="transition-all duration-1000 ease-linear"
+          />
+          <defs>
+            <linearGradient id="gradient">
+              <stop offset="0%" stopColor="#6366f1" />
+              <stop offset="100%" stopColor="#8b5cf6" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-5xl font-bold text-gray-800 dark:text-gray-100">
+            {formatTime(timeLeft)}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex justify-center gap-4 mb-6">
+        <button
+          onClick={toggleTimer}
+          className={`px-8 py-3 rounded-full text-white font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all bg-gradient-to-r ${
+            isRunning
+              ? 'from-orange-500 to-red-500'
+              : 'from-green-500 to-emerald-500'
+          }`}
+        >
+          {isRunning ? (
+            <>
+              <Pause className="inline w-5 h-5 mr-2" />
+              一時停止
+            </>
+          ) : (
+            <>
+              <Play className="inline w-5 h-5 mr-2" />
+              開始
+            </>
+          )}
+        </button>
+        <button
+          onClick={resetTimer}
+          className="px-6 py-3 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+        >
+          <RotateCcw className="inline w-5 h-5 mr-2" />
+          リセット
+        </button>
+      </div>
+
+      <div className="flex justify-center gap-2">
+        {Object.entries(sessions).map(([key, sess]) => (
+          <button
+            key={key}
+            onClick={() => switchSession(key as SessionType)}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              currentSession === key
+                ? 'bg-indigo-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            {sess.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-6 text-center">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          今日の完了セッション: {totalSessions}
+        </p>
+      </div>
+    </div>
+  )
+}
