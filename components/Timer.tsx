@@ -106,20 +106,23 @@ export default function Timer() {
       interval = setInterval(() => {
         setTimeLeft((prevTime) => {
           if (prevTime <= 1) {
-            handleComplete()
             return 0
           }
           return prevTime - 1
         })
       }, 1000)
-    } else if (timeLeft === 0) {
-      handleComplete()
     }
 
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [isRunning, timeLeft, handleComplete])
+  }, [isRunning, timeLeft])
+
+  useEffect(() => {
+    if (timeLeft === 0 && isRunning) {
+      handleComplete()
+    }
+  }, [timeLeft, isRunning, handleComplete])
 
   const toggleTimer = () => {
     setIsRunning(!isRunning)
