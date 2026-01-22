@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, TrendingUp, Clock, Target, Award } from 'lucide-react'
 
 interface StatisticsProps {
@@ -14,29 +14,97 @@ interface DailyStats {
   breakMinutes: number
 }
 
-const mockData: DailyStats[] = [
-  { date: '月曜日', sessions: 8, focusMinutes: 200, breakMinutes: 40 },
-  { date: '火曜日', sessions: 6, focusMinutes: 150, breakMinutes: 30 },
-  { date: '水曜日', sessions: 10, focusMinutes: 250, breakMinutes: 50 },
-  { date: '木曜日', sessions: 7, focusMinutes: 175, breakMinutes: 35 },
-  { date: '金曜日', sessions: 9, focusMinutes: 225, breakMinutes: 45 },
-  { date: '土曜日', sessions: 4, focusMinutes: 100, breakMinutes: 20 },
-  { date: '日曜日', sessions: 5, focusMinutes: 125, breakMinutes: 25 },
-]
+interface Session {
+  id: string
+  type: string
+  durationMinutes: number
+  startedAt: string
+  completedAt: string | null
+  isCompleted: boolean
+}
 
 export default function Statistics({ onClose }: StatisticsProps) {
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week')
+  const [dailyStats, setDailyStats] = useState<DailyStats[]>([])
+  const [recentSessions, setRecentSessions] = useState<Session[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const totalSessions = mockData.reduce((acc, day) => acc + day.sessions, 0)
-  const totalFocusHours = Math.round(
-    mockData.reduce((acc, day) => acc + day.focusMinutes, 0) / 60
-  )
-  const averageSessions = Math.round(totalSessions / mockData.length)
-  const bestDay = mockData.reduce((max, day) =>
-    day.sessions > max.sessions ? day : max
-  )
+  useEffect(() => {
+    fetchStatistics()
+  }, [])
 
-  const maxSessions = Math.max(...mockData.map((d) => d.sessions))
+  const fetchStatistics = async () => {
+    try {
+      const response = await fetch('/api/sessions')
+      const data = await response.json()
+
+      if (data.sessions && data.sessions.length > 0) {
+        // Group sessions by day and calculate stats
+        const statsMap = new Map<string, DailyStats>()
+        const today = new Date()
+        const weekDays = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日']
+
+        // Initialize last 7 days
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date(today)
+          date.setDate(today.getDate() - i)
+          const dayName = weekDays[date.getDay()]
+          statsMap.set(dayName, {
+            date: dayName,
+            sessions: 0,
+            focusMinutes: 0,
+            breakMinutes: 0
+          })
+        }
+
+        // Aggregate session data
+        data.sessions.forEach((session: Session) => {
+          if (session.isCompleted && session.completedAt) {
+            const sessionDate = new Date(session.completedAt)
+            const dayName = weekDays[sessionDate.getDay()]
+            const stats = statsMap.get(dayName)
+
+            if (stats) {
+              stats.sessions++
+              if (session.type === 'work') {
+                stats.focusMinutes += session.durationMinutes
+              } else {
+                stats.breakMinutes += session.durationMinutes
+              }
+            }
+          }
+        })
+
+        setDailyStats(Array.from(statsMap.values()))
+        setRecentSessions(data.sessions.slice(0, 5))
+      } else {
+        // No data, set empty arrays
+        setDailyStats([])
+        setRecentSessions([])
+      }
+    } catch (error) {
+      console.error('Failed to fetch statistics:', error)
+      setDailyStats([])
+      setRecentSessions([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const totalSessions = dailyStats.reduce((acc, day) => acc + day.sessions, 0)
+  const totalFocusHours = dailyStats.length > 0
+    ? Math.round(dailyStats.reduce((acc, day) => acc + day.focusMinutes, 0) / 60)
+    : 0
+  const averageSessions = dailyStats.length > 0
+    ? Math.round(totalSessions / dailyStats.length)
+    : 0
+  const bestDay = dailyStats.length > 0
+    ? dailyStats.reduce((max, day) => day.sessions > max.sessions ? day : max)
+    : { date: '-', sessions: 0, focusMinutes: 0, breakMinutes: 0 }
+
+  const maxSessions = dailyStats.length > 0
+    ? Math.max(...dailyStats.map((d) => d.sessions))
+    : 1
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
@@ -83,37 +151,42 @@ export default function Statistics({ onClose }: StatisticsProps) {
         </div>
       </div>
 
-      <div className="mb-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-            週間レポート
-          </h3>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setViewMode('week')}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'week'
-                  ? 'bg-indigo-500 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              週
-            </button>
-            <button
-              onClick={() => setViewMode('month')}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'month'
-                  ? 'bg-indigo-500 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              月
-            </button>
-          </div>
+      {loading ? (
+        <div className="flex justify-center items-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
         </div>
+      ) : dailyStats.length > 0 ? (
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+              週間レポート
+            </h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setViewMode('week')}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  viewMode === 'week'
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                週
+              </button>
+              <button
+                onClick={() => setViewMode('month')}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  viewMode === 'month'
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                月
+              </button>
+            </div>
+          </div>
 
-        <div className="space-y-3">
-          {mockData.map((day, index) => (
+          <div className="space-y-3">
+            {dailyStats.map((day, index) => (
             <div key={index} className="flex items-center gap-4">
               <span className="w-16 text-sm text-gray-600 dark:text-gray-400">
                 {day.date}
@@ -133,48 +206,51 @@ export default function Statistics({ onClose }: StatisticsProps) {
               </span>
             </div>
           ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="text-center py-10">
+          <p className="text-gray-500 dark:text-gray-400">
+            まだデータがありません。
+            <br />
+            タイマーを使い始めると、ここに統計が表示されます。
+          </p>
+        </div>
+      )}
 
-      <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
-        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">
-          最近のセッション
-        </h3>
-        <div className="space-y-2">
-          <div className="flex justify-between items-center py-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              今日 14:30
-            </span>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              作業 - 25分
-            </span>
-          </div>
-          <div className="flex justify-between items-center py-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              今日 14:00
-            </span>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              作業 - 25分
-            </span>
-          </div>
-          <div className="flex justify-between items-center py-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              今日 13:30
-            </span>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              休憩 - 5分
-            </span>
-          </div>
-          <div className="flex justify-between items-center py-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              今日 13:00
-            </span>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              作業 - 25分
-            </span>
+      {recentSessions.length > 0 && (
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">
+            最近のセッション
+          </h3>
+          <div className="space-y-2">
+            {recentSessions.map((session) => {
+              const sessionDate = new Date(session.completedAt || session.startedAt)
+              const timeStr = sessionDate.toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+              const dateStr = sessionDate.toLocaleDateString('ja-JP', {
+                month: 'numeric',
+                day: 'numeric'
+              })
+              const typeLabel = session.type === 'work' ? '作業' :
+                               session.type === 'shortBreak' ? '短い休憩' : '長い休憩'
+
+              return (
+                <div key={session.id} className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {dateStr} {timeStr}
+                  </span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {typeLabel} - {session.durationMinutes}分
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

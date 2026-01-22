@@ -8,22 +8,22 @@ datasource db {
 }
 
 model User {
-  id           String      @id @default(cuid())
-  email        String      @unique
-  username     String?     @unique
-  displayName  String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  sessions     Session[]
-  tags         Tag[]
-  tasks        Task[]
-  preferences  UserPreferences?
+  id          String           @id @default(cuid())
+  email       String           @unique
+  username    String?          @unique
+  displayName String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  sessions    Session[]
+  tags        Tag[]
+  tasks       Task[]
+  preferences UserPreferences?
 }
 
 model Session {
   id                String    @id @default(cuid())
   userId            String
-  type              String    // work, short_break, long_break
+  type              String
   durationMinutes   Int
   startedAt         DateTime
   completedAt       DateTime?
@@ -33,10 +33,9 @@ model Session {
   notes             String?
   isCompleted       Boolean   @default(false)
   createdAt         DateTime  @default(now())
-
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tag               Tag?      @relation(fields: [tagId], references: [id])
   task              Task?     @relation(fields: [taskId], references: [id])
+  tag               Tag?      @relation(fields: [tagId], references: [id])
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Tag {
@@ -47,44 +46,41 @@ model Tag {
   icon      String?
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
-
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions  Session[]
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, name])
 }
 
 model Task {
-  id                  String    @id @default(cuid())
-  userId              String
-  title               String
-  description         String?
-  estimatedPomodoros  Int       @default(1)
-  completedPomodoros  Int       @default(0)
-  externalLink        String?
-  status              String    @default("pending") // pending, in_progress, completed
-  dueDate             DateTime?
-  createdAt           DateTime  @default(now())
-  completedAt         DateTime?
-
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessions            Session[]
+  id                 String    @id @default(cuid())
+  userId             String
+  title              String
+  description        String?
+  estimatedPomodoros Int       @default(1)
+  completedPomodoros Int       @default(0)
+  externalLink       String?
+  status             String    @default("pending")
+  dueDate            DateTime?
+  createdAt          DateTime  @default(now())
+  completedAt        DateTime?
+  sessions           Session[]
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserPreferences {
-  userId                  String  @id
-  workDuration            Int     @default(25)
-  shortBreakDuration      Int     @default(5)
-  longBreakDuration       Int     @default(15)
-  sessionsUntilLongBreak  Int     @default(4)
-  autoStartBreaks         Boolean @default(false)
-  autoStartPomodoros      Boolean @default(false)
-  notificationSound       String  @default("default")
-  notificationVolume      Int     @default(70)
-  theme                   String  @default("auto") // light, dark, auto
-  strictMode              Boolean @default(false)
-  dailyGoalPomodoros      Int     @default(8)
-  updatedAt               DateTime @updatedAt @default(now())
-
-  user                    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                 String   @id
+  workDuration           Int      @default(25)
+  shortBreakDuration     Int      @default(5)
+  longBreakDuration      Int      @default(15)
+  sessionsUntilLongBreak Int      @default(4)
+  autoStartBreaks        Boolean  @default(false)
+  autoStartPomodoros     Boolean  @default(false)
+  notificationSound      String   @default("default")
+  notificationVolume     Int      @default(70)
+  theme                  String   @default("auto")
+  strictMode             Boolean  @default(false)
+  dailyGoalPomodoros     Int      @default(8)
+  updatedAt              DateTime @default(now()) @updatedAt
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
