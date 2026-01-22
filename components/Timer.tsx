@@ -14,36 +14,75 @@ interface Session {
   color: string
 }
 
-const sessions: Record<SessionType, Session> = {
+interface TimerSettings {
+  workDuration: number
+  shortBreakDuration: number
+  longBreakDuration: number
+  sessionsUntilLongBreak: number
+  autoStartBreaks: boolean
+  autoStartPomodoros: boolean
+  notificationSound: string
+  notificationVolume: number
+  dailyGoal: number
+}
+
+const getSettings = (): TimerSettings => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('pomodoroSettings')
+    if (saved) {
+      try {
+        return JSON.parse(saved)
+      } catch {
+        // デフォルト値を返す
+      }
+    }
+  }
+  return {
+    workDuration: 25,
+    shortBreakDuration: 5,
+    longBreakDuration: 15,
+    sessionsUntilLongBreak: 4,
+    autoStartBreaks: false,
+    autoStartPomodoros: false,
+    notificationSound: 'default',
+    notificationVolume: 70,
+    dailyGoal: 8,
+  }
+}
+
+const createSessions = (settings: TimerSettings): Record<SessionType, Session> => ({
   work: {
     type: 'work',
-    duration: 25 * 60,
+    duration: settings.workDuration * 60,
     name: '作業',
     icon: <Brain className="w-8 h-8" />,
     color: 'from-red-500 to-rose-500',
   },
   shortBreak: {
     type: 'shortBreak',
-    duration: 5 * 60,
+    duration: settings.shortBreakDuration * 60,
     name: '短い休憩',
     icon: <Coffee className="w-8 h-8" />,
     color: 'from-green-500 to-emerald-500',
   },
   longBreak: {
     type: 'longBreak',
-    duration: 15 * 60,
+    duration: settings.longBreakDuration * 60,
     name: '長い休憩',
     icon: <TreePine className="w-8 h-8" />,
     color: 'from-blue-500 to-cyan-500',
   },
-}
+})
 
 export default function Timer() {
+  const [settings, setSettings] = useState<TimerSettings>(getSettings)
+  const [sessions, setSessions] = useState(() => createSessions(settings))
   const [currentSession, setCurrentSession] = useState<SessionType>('work')
   const [timeLeft, setTimeLeft] = useState(sessions.work.duration)
   const [isRunning, setIsRunning] = useState(false)
   const [sessionCount, setSessionCount] = useState(0)
   const [totalSessions, setTotalSessions] = useState(0)
+  const [sessionsUntilLongBreak, setSessionsUntilLongBreak] = useState(settings.sessionsUntilLongBreak)
 
   // 通知権限をリクエスト
   useEffect(() => {
@@ -51,6 +90,32 @@ export default function Timer() {
       Notification.requestPermission()
     }
   }, [])
+
+  // localStorageの変更を監視して設定を更新
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const newSettings = getSettings()
+      setSettings(newSettings)
+      const newSessions = createSessions(newSettings)
+      setSessions(newSessions)
+      setSessionsUntilLongBreak(newSettings.sessionsUntilLongBreak)
+      // 現在のセッションの時間を更新（実行中でない場合のみ）
+      if (!isRunning) {
+        setTimeLeft(newSessions[currentSession].duration)
+      }
+    }
+
+    // storage イベントを監視（他のタブからの変更を検知）
+    window.addEventListener('storage', handleStorageChange)
+
+    // カスタムイベントを監視（同じタブからの変更を検知）
+    window.addEventListener('pomodoroSettingsChanged', handleStorageChange)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('pomodoroSettingsChanged', handleStorageChange)
+    }
+  }, [currentSession, isRunning])
 
   const session = sessions[currentSession]
   const progress = ((session.duration - timeLeft) / session.duration) * 100
@@ -81,7 +146,7 @@ export default function Timer() {
       setSessionCount(newSessionCount)
       setTotalSessions(totalSessions + 1)
 
-      if (newSessionCount >= 4) {
+      if (newSessionCount >= sessionsUntilLongBreak) {
         toast.success('お疲れ様でした！長い休憩を取りましょう')
         setCurrentSession('longBreak')
         setTimeLeft(sessions.longBreak.duration)
@@ -97,7 +162,7 @@ export default function Timer() {
       setTimeLeft(sessions.work.duration)
     }
     setIsRunning(false)
-  }, [currentSession, sessionCount, totalSessions])
+  }, [currentSession, sessionCount, totalSessions, sessions, sessionsUntilLongBreak])
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined

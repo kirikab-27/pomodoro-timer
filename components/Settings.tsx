@@ -33,10 +33,24 @@ const defaultSettings: TimerSettings = {
 }
 
 export default function Settings({ onClose }: SettingsProps) {
-  const [settings, setSettings] = useState<TimerSettings>(defaultSettings)
+  const [settings, setSettings] = useState<TimerSettings>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pomodoroSettings')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {
+          return defaultSettings
+        }
+      }
+    }
+    return defaultSettings
+  })
 
   const handleSave = () => {
     localStorage.setItem('pomodoroSettings', JSON.stringify(settings))
+    // カスタムイベントを発行して設定変更を通知
+    window.dispatchEvent(new Event('pomodoroSettingsChanged'))
     toast.success('設定を保存しました')
     onClose()
   }
