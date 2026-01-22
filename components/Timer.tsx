@@ -129,9 +129,57 @@ export default function Timer() {
   }
 
   const handleComplete = useCallback(() => {
-    // 通知音を再生（実際の音声ファイルがある場合は以下のコメントを解除）
-    // const audio = new Audio('/notification.mp3')
-    // audio.play().catch(() => {})
+    // 通知音を再生（Web Audio APIを使用）
+    const playNotificationSound = () => {
+      try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const duration = 0.3
+        const frequency = 800
+
+        // オシレーターを作成
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
+
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+
+        // 音の設定
+        oscillator.frequency.value = frequency
+        oscillator.type = 'sine'
+
+        // 音量の設定（フェードアウト効果）
+        const volume = settings.notificationVolume / 100
+        gainNode.gain.setValueAtTime(volume, audioContext.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration)
+
+        // 音を再生
+        oscillator.start(audioContext.currentTime)
+        oscillator.stop(audioContext.currentTime + duration)
+
+        // 2回目の音（少し遅れて）
+        setTimeout(() => {
+          const oscillator2 = audioContext.createOscillator()
+          const gainNode2 = audioContext.createGain()
+
+          oscillator2.connect(gainNode2)
+          gainNode2.connect(audioContext.destination)
+
+          oscillator2.frequency.value = frequency * 1.25
+          oscillator2.type = 'sine'
+
+          gainNode2.gain.setValueAtTime(volume * 0.8, audioContext.currentTime)
+          gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration)
+
+          oscillator2.start(audioContext.currentTime)
+          oscillator2.stop(audioContext.currentTime + duration)
+        }, 150)
+
+      } catch (error) {
+        console.error('通知音の再生に失敗しました:', error)
+      }
+    }
+
+    playNotificationSound()
 
     // ブラウザ通知を表示
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -162,7 +210,7 @@ export default function Timer() {
       setTimeLeft(sessions.work.duration)
     }
     setIsRunning(false)
-  }, [currentSession, sessionCount, totalSessions, sessions, sessionsUntilLongBreak])
+  }, [currentSession, sessionCount, totalSessions, sessions, sessingsUntilLongBreak, settings])
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined
