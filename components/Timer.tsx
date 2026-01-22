@@ -210,7 +210,7 @@ export default function Timer() {
       setTimeLeft(sessions.work.duration)
     }
     setIsRunning(false)
-  }, [currentSession, sessionCount, totalSessions, sessions, sessingsUntilLongBreak, settings])
+  }, [currentSession, sessionCount, totalSessions, sessions, sessionsUntilLongBreak, settings])
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined
